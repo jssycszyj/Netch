@@ -73,6 +73,7 @@ namespace Netch.Controllers
                 if (Instance != null && !Instance.HasExited)
                 {
                     Instance.Kill();
+                    Instance.WaitForExit();
                 }
             }
             catch (Exception e)
@@ -89,6 +90,7 @@ namespace Netch.Controllers
                 {
                     File.Delete("logging\\NTT.log");
                 }
+
                 File.AppendAllText("logging\\NTT.log", $"{e.Data}\r\n");
             }
         }

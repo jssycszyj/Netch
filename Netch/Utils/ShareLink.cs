@@ -1,12 +1,12 @@
-﻿using System;
+﻿using Netch.Models;
+using Netch.Models.SS;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
-using Netch.Models;
-using Netch.Models.SS;
-using Newtonsoft.Json;
 
 namespace Netch.Utils
 {
@@ -28,7 +28,7 @@ namespace Netch.Utils
         /// <returns>加密后的字符串</returns>
         public static string URLSafeBase64Encode(string text)
         {
-            return Convert.ToBase64String(Encoding.UTF8.GetBytes(text)).Replace("-", "+").Replace("_", "/").PadRight(text.Length + (4 - text.Length % 4) % 4, '=');
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(text)).Replace("+", "-").Replace("/", "_").Replace("=", "");
         }
 
         /// <summary>
@@ -515,6 +515,56 @@ namespace Netch.Utils
                             return null;
                     }
                     list.Add(NetchLink);
+                }
+                else if(text.StartsWith("trojan://"))
+                {
+                    var data = new Server();
+                    data.Type = "Trojan";
+
+                    text = text.Replace("/?", "?");
+                    try
+                    {
+                        if (text.Contains("#"))
+                        {
+                            data.Remark = HttpUtility.UrlDecode(text.Split('#')[1]);
+                            text = text.Split('#')[0];
+                        }
+                        if (text.Contains("?"))
+                        {
+                            var reg = new Regex(@"^(?<data>.+?)\?(.+)$");
+                            var regmatch = reg.Match(text);
+
+                            if (regmatch.Success)
+                            {
+                                var peer = HttpUtility.UrlDecode(HttpUtility.ParseQueryString(new Uri(text).Query).Get("peer"));
+
+                                if (peer != null)
+                                    data.Host = peer;
+
+                                text = regmatch.Groups["data"].Value;
+                            }
+                            else
+                            {
+                                throw new FormatException();
+                            }
+                        }
+                        var finder = new Regex(@"^trojan://(?<psk>.+?)@(?<server>.+):(?<port>\d+)");
+                        var match = finder.Match(text);
+                        if (!match.Success)
+                        {
+                             throw new FormatException();
+                        }
+
+                        data.Password = match.Groups["psk"].Value;
+                        data.Hostname = match.Groups["server"].Value;
+                        data.Port = int.Parse(match.Groups["port"].Value);
+
+                        list.Add(data);
+                    }
+                    catch (FormatException)
+                    {
+                        return null;
+                    }
                 }
             }
             catch (Exception e)

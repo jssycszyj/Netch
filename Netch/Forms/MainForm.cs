@@ -1,4 +1,6 @@
+using Microsoft.Win32;
 using Netch.Controllers;
+using Netch.Utils;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -49,13 +51,35 @@ namespace Netch.Forms
         public MainForm()
         {
             InitializeComponent();
+
+            // 监听电源事件
+            SystemEvents.PowerModeChanged += new PowerModeChangedEventHandler(SystemEvents_PowerModeChanged);
+
             VersionLabel.Text = UpdateChecker.Version;
 
             CheckForIllegalCrossThreadCalls = false;
             // MenuStrip.Renderer = new Override.ToolStripProfessionalRender();
             Instance = this;
         }
-
+        /// <summary>
+        /// 监听电源事件，自动重启Netch服务
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            switch (e.Mode)
+            {
+                case PowerModes.Suspend://操作系统即将挂起
+                    Logging.Info("操作系统即将挂起，自动停止===>" + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+                    ControlFun();
+                    break;
+                case PowerModes.Resume://操作系统即将从挂起状态继续
+                    Logging.Info("操作系统即将从挂起状态继续，自动重启===>" + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+                    ControlFun();
+                    break;
+            }
+        }
         private void CheckUpdate()
         {
             var updater = new UpdateChecker();
@@ -71,10 +95,16 @@ namespace Netch.Forms
 
         public void TestServer()
         {
-            Parallel.ForEach(Global.Settings.Server, new ParallelOptions { MaxDegreeOfParallelism = 16 }, server =>
+            try
             {
-                server.Test();
-            });
+                Parallel.ForEach(Global.Settings.Server, new ParallelOptions { MaxDegreeOfParallelism = 16 }, server =>
+                {
+                    server.Test();
+                });
+            }
+            catch (Exception)
+            {
+            }
         }
 
         public void InitServer()
@@ -143,7 +173,7 @@ namespace Netch.Forms
 
                                 if (splited.Length >= 1)
                                 {
-                                    mode.Remark = splited[0].Trim();
+                                    mode.Remark = Utils.i18N.Translate(splited[0].Trim());
                                 }
 
                                 if (splited.Length >= 2)
@@ -225,13 +255,17 @@ namespace Netch.Forms
         private void SaveConfigs()
         {
             Global.Settings.ServerComboBoxSelectedIndex = ServerComboBox.SelectedIndex;
-            if (ModeComboBox.Tag is object[] list)
+            if (ModeComboBox.SelectedItem != null)
             {
-                Global.Settings.ModeComboBoxSelectedIndex = list.ToList().IndexOf(ModeComboBox.SelectedItem);
-            }
-            else
-            {
-                Global.Settings.ModeComboBoxSelectedIndex = ModeComboBox.Items.IndexOf(ModeComboBox.SelectedItem);
+
+                if (ModeComboBox.Tag is object[] list)
+                {
+                    Global.Settings.ModeComboBoxSelectedIndex = list.ToList().IndexOf(ModeComboBox.SelectedItem);
+                }
+                else
+                {
+                    Global.Settings.ModeComboBoxSelectedIndex = ModeComboBox.Items.IndexOf(ModeComboBox.SelectedItem);
+                }
             }
             Utils.Configuration.Save();
         }
@@ -318,6 +352,7 @@ namespace Netch.Forms
             AddShadowsocksServerToolStripMenuItem.Text = Utils.i18N.Translate(AddShadowsocksServerToolStripMenuItem.Text);
             AddShadowsocksRServerToolStripMenuItem.Text = Utils.i18N.Translate(AddShadowsocksRServerToolStripMenuItem.Text);
             AddVMessServerToolStripMenuItem.Text = Utils.i18N.Translate(AddVMessServerToolStripMenuItem.Text);
+            AddTrojanServerToolStripMenuItem.Text = Utils.i18N.Translate(AddTrojanServerToolStripMenuItem.Text);
             ModeToolStripMenuItem.Text = Utils.i18N.Translate(ModeToolStripMenuItem.Text);
             CreateProcessModeToolStripMenuItem.Text = Utils.i18N.Translate(CreateProcessModeToolStripMenuItem.Text);
             ManageProcessModeToolStripMenuItem.Text = Utils.i18N.Translate(ManageProcessModeToolStripMenuItem.Text);
@@ -325,10 +360,14 @@ namespace Netch.Forms
             ManageSubscribeLinksToolStripMenuItem.Text = Utils.i18N.Translate(ManageSubscribeLinksToolStripMenuItem.Text);
             UpdateServersFromSubscribeLinksToolStripMenuItem.Text = Utils.i18N.Translate(UpdateServersFromSubscribeLinksToolStripMenuItem.Text);
             OptionsToolStripMenuItem.Text = Utils.i18N.Translate(OptionsToolStripMenuItem.Text);
+            exitToolStripMenuItem.Text = Utils.i18N.Translate(exitToolStripMenuItem.Text);
             RestartServiceToolStripMenuItem.Text = Utils.i18N.Translate(RestartServiceToolStripMenuItem.Text);
             UninstallServiceToolStripMenuItem.Text = Utils.i18N.Translate(UninstallServiceToolStripMenuItem.Text);
             ReloadModesToolStripMenuItem.Text = Utils.i18N.Translate(ReloadModesToolStripMenuItem.Text);
             CleanDNSCacheToolStripMenuItem.Text = Utils.i18N.Translate(CleanDNSCacheToolStripMenuItem.Text);
+            UpdateACLToolStripMenuItem.Text = Utils.i18N.Translate(UpdateACLToolStripMenuItem.Text);
+            updateACLWithProxyToolStripMenuItem.Text = Utils.i18N.Translate(updateACLWithProxyToolStripMenuItem.Text);
+            reinstallTapDriverToolStripMenuItem.Text = Utils.i18N.Translate(reinstallTapDriverToolStripMenuItem.Text);
             AboutToolStripButton.Text = Utils.i18N.Translate(AboutToolStripButton.Text);
             ConfigurationGroupBox.Text = Utils.i18N.Translate(ConfigurationGroupBox.Text);
             ServerLabel.Text = Utils.i18N.Translate(ServerLabel.Text);
@@ -455,6 +494,12 @@ namespace Netch.Forms
             Hide();
         }
 
+        private void AddTrojanServerToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            new Server.Trojan().Show();
+            Hide();
+        }
+
         private void CreateProcessModeToolStripButton_Click(object sender, EventArgs e)
         {
             new Mode.Process().Show();
@@ -474,6 +519,9 @@ namespace Netch.Forms
 
         private void UpdateServersFromSubscribeLinksToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (Global.Settings.UseProxyToUpdateSubscription && ServerComboBox.SelectedIndex == -1)
+                Global.Settings.UseProxyToUpdateSubscription = false;
+
             if (Global.Settings.UseProxyToUpdateSubscription)
             {
                 // 当前 ServerComboBox 中至少有一项
@@ -722,6 +770,9 @@ namespace Netch.Forms
                     case "VMess":
                         new Server.VMess(ServerComboBox.SelectedIndex).Show();
                         break;
+                    case "Trojan":
+                        new Server.Trojan(ServerComboBox.SelectedIndex).Show();
+                        break;
                     default:
                         return;
                 }
@@ -774,6 +825,12 @@ namespace Netch.Forms
 
         private void ControlButton_Click(object sender, EventArgs e)
         {
+            ControlFun();
+        }
+        public void ControlFun()
+        {
+            //聚焦到启动按钮，防止模式选择框变成蓝色:D
+            ControlButton.Focus();
             SaveConfigs();
             if (State == Models.State.Waiting || State == Models.State.Stopped)
             {
@@ -791,7 +848,20 @@ namespace Netch.Forms
                     return;
                 }
 
-                MenuStrip.Enabled = ConfigurationGroupBox.Enabled = ControlButton.Enabled = SettingsButton.Enabled = false;
+                //MenuStrip.Enabled = ConfigurationGroupBox.Enabled = ControlButton.Enabled = SettingsButton.Enabled = false;
+
+                //关闭启动按钮
+                ControlButton.Enabled = false;
+
+                //关闭部分选项功能
+                RestartServiceToolStripMenuItem.Enabled = false;
+                UninstallServiceToolStripMenuItem.Enabled = false;
+                updateACLWithProxyToolStripMenuItem.Enabled = false;
+                UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled = false;
+                reinstallTapDriverToolStripMenuItem.Enabled = false;
+                ServerComboBox.Enabled = false;
+                ModeComboBox.Enabled = false;
+
                 ControlButton.Text = "...";
                 StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Starting")}";
                 State = Models.State.Starting;
@@ -885,8 +955,8 @@ namespace Netch.Forms
                                     if (State == Models.State.Started)
                                     {
                                         server.Test();
-                                    // 重载服务器列表
-                                    InitServer();
+                                        // 重载服务器列表
+                                        InitServer();
 
                                         Thread.Sleep(Global.Settings.StartedTcping_Interval * 1000);
                                     }
@@ -901,6 +971,17 @@ namespace Netch.Forms
                     else
                     {
                         MenuStrip.Enabled = ConfigurationGroupBox.Enabled = ControlButton.Enabled = SettingsButton.Enabled = true;
+
+                        RestartServiceToolStripMenuItem.Enabled = true;
+                        UninstallServiceToolStripMenuItem.Enabled = true;
+                        updateACLWithProxyToolStripMenuItem.Enabled = true;
+                        UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled = true;
+                        reinstallTapDriverToolStripMenuItem.Enabled = true;
+                        ServerComboBox.Enabled = true;
+                        ModeComboBox.Enabled = true;
+                        //隐藏NTT测试
+                        NatTypeStatusLabel.Visible = false;
+
                         ControlButton.Text = Utils.i18N.Translate("Start");
                         StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Start failed")}";
                         State = Models.State.Stopped;
@@ -909,6 +990,7 @@ namespace Netch.Forms
             }
             else
             {
+
                 ControlButton.Enabled = false;
                 ControlButton.Text = "...";
                 StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Stopping")}";
@@ -936,6 +1018,16 @@ namespace Netch.Forms
                     ControlButton.Enabled = true;
                     ProfileGroupBox.Enabled = true;
 
+                    RestartServiceToolStripMenuItem.Enabled = true;
+                    UninstallServiceToolStripMenuItem.Enabled = true;
+                    updateACLWithProxyToolStripMenuItem.Enabled = true;
+                    UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled = true;
+                    reinstallTapDriverToolStripMenuItem.Enabled = true;
+                    ServerComboBox.Enabled = true;
+                    ModeComboBox.Enabled = true;
+                    //隐藏NTT测试
+                    NatTypeStatusLabel.Visible = false;
+
                     ControlButton.Text = Utils.i18N.Translate("Start");
                     StatusLabel.Text = $"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Stopped")}";
                     State = Models.State.Stopped;
@@ -943,8 +1035,8 @@ namespace Netch.Forms
                     TestServer();
                 });
             }
-        }
 
+        }
         private void ShowMainFormToolStripButton_Click(object sender, EventArgs e)
         {
             if (WindowState == FormWindowState.Minimized)
@@ -1275,6 +1367,7 @@ namespace Netch.Forms
         }
         public void NatTypeStatusText(string text)
         {
+            NatTypeStatusLabel.Visible = true;
             if (!string.IsNullOrWhiteSpace(text))
             {
                 NatTypeStatusLabel.Text = "NAT" + Utils.i18N.Translate(": ") + text;
@@ -1283,6 +1376,150 @@ namespace Netch.Forms
             {
                 NatTypeStatusLabel.Text = "NAT" + Utils.i18N.Translate(": ") + Utils.i18N.Translate("Test failed");
             }
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // 当前状态如果不是已停止状态
+            if (State != Models.State.Waiting && State != Models.State.Stopped)
+            {
+                // 如果未勾选退出时停止，要求先点击停止按钮
+                if (!Global.Settings.StopWhenExited)
+                {
+                    MessageBox.Show(Utils.i18N.Translate("Please press Stop button first"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                    Visible = true;
+                    ShowInTaskbar = true;  // 显示在系统任务栏 
+                    WindowState = FormWindowState.Normal;  // 还原窗体 
+                    NotifyIcon.Visible = true;  // 托盘图标隐藏 
+
+                    return;
+                }
+                // 否则直接调用停止按钮的方法
+
+                ControlButton_Click(sender, e);
+            }
+
+            SaveConfigs();
+
+            State = Models.State.Terminating;
+            NotifyIcon.Visible = false;
+            Close();
+            Dispose();
+            Environment.Exit(Environment.ExitCode);
+        }
+
+        private void updateACLToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Starting update ACL")}");
+            using var client = new Override.WebClient();
+
+            client.DownloadFileTaskAsync(Global.Settings.ACL, "bin\\default.acl");
+            client.DownloadFileCompleted += ((sender, args) =>
+            {
+                try
+                {
+
+                    if (args.Error == null)
+                    {
+                        NotifyIcon.ShowBalloonTip(5,
+                                UpdateChecker.Name, Utils.i18N.Translate("ACL updated successfully"),
+                                ToolTipIcon.Info);
+                    }
+                    else
+                    {
+                        Utils.Logging.Info("ACL 更新失败！" + args.Error);
+                        MessageBox.Show(Utils.i18N.Translate("ACL update failed") + "\n" + args.Error);
+                    }
+                }
+                finally
+                {
+                    StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Waiting for command")}");
+                }
+            });
+        }
+
+        private void updateACLWithProxyToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            updateACLWithProxyToolStripMenuItem.Enabled = false;
+            if (Global.Settings.UseProxyToUpdateSubscription)
+            {
+                // 当前 ServerComboBox 中至少有一项
+                if (ServerComboBox.SelectedIndex == -1)
+                {
+                    MessageBox.Show(Utils.i18N.Translate("Please select a server first"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                MenuStrip.Enabled = ConfigurationGroupBox.Enabled = ControlButton.Enabled = SettingsButton.Enabled = false;
+                ControlButton.Text = "...";
+            }
+
+            Task.Run(() =>
+            {
+                var mode = new Models.Mode
+                {
+                    Remark = "ProxyUpdate",
+                    Type = 5
+                };
+                MainController = new MainController();
+                MainController.Start(ServerComboBox.SelectedItem as Models.Server, mode);
+
+                using var client = new Override.WebClient();
+
+                client.Proxy = new System.Net.WebProxy($"http://127.0.0.1:{Global.Settings.HTTPLocalPort}");
+
+                StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Updating in the background")}");
+                try
+                {
+                    client.DownloadFile(Global.Settings.ACL, "bin\\default.acl");
+                    NotifyIcon.ShowBalloonTip(5,
+                            UpdateChecker.Name, Utils.i18N.Translate("ACL updated successfully"),
+                            ToolTipIcon.Info);
+                }
+                catch (Exception e)
+                {
+                    Utils.Logging.Info("使用代理更新 ACL 失败！" + e.Message);
+                    MessageBox.Show(Utils.i18N.Translate("ACL update failed") + "\n" + e.Message);
+                }
+                finally
+                {
+                    updateACLWithProxyToolStripMenuItem.Enabled = true;
+                    MenuStrip.Enabled = ConfigurationGroupBox.Enabled = ControlButton.Enabled = SettingsButton.Enabled = true;
+
+                    ControlButton.Text = Utils.i18N.Translate("Start");
+                    StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Waiting for command")}");
+                    MainController.Stop();
+                }
+            });
+        }
+
+        private void reinstallTapDriverToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Task.Run(() =>
+            {
+                StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Reinstalling TUN/TAP driver")}");
+                Enabled = false;
+                try
+                {
+                    Configuration.deltapall();
+                    Configuration.addtap();
+                    NotifyIcon.ShowBalloonTip(5,
+                            UpdateChecker.Name, Utils.i18N.Translate("Reinstall TUN/TAP driver successfully"),
+                            ToolTipIcon.Info);
+                }
+                catch
+                {
+                    NotifyIcon.ShowBalloonTip(5,
+                            UpdateChecker.Name, Utils.i18N.Translate("Reinstall TUN/TAP driver failed"),
+                            ToolTipIcon.Error);
+                }
+                finally
+                {
+                    ControlButton.Text = Utils.i18N.Translate("Start");
+                    StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Waiting for command")}");
+                    Enabled = true;
+                }
+            });
         }
     }
 }

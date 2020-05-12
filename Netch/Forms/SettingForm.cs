@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Net;
 using System.Windows.Forms;
 using TaskScheduler;
@@ -15,7 +14,7 @@ namespace Netch.Forms
 
         private void TUNTAPUseCustomDNSCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if (!TUNTAPUseCustomDNSCheckBox.Checked)
+            if (!UseCustomDNSCheckBox.Checked)
             {
                 TUNTAPDNSTextBox.Enabled = false;
             }
@@ -51,10 +50,12 @@ namespace Netch.Forms
             TUNTAPAddressLabel.Text = Utils.i18N.Translate(TUNTAPAddressLabel.Text);
             TUNTAPNetmaskLabel.Text = Utils.i18N.Translate(TUNTAPNetmaskLabel.Text);
             TUNTAPGatewayLabel.Text = Utils.i18N.Translate(TUNTAPGatewayLabel.Text);
-            TUNTAPUseCustomDNSCheckBox.Text = Utils.i18N.Translate(TUNTAPUseCustomDNSCheckBox.Text);
-            TUNTAPProxyDNSCheckBox.Text = Utils.i18N.Translate(TUNTAPProxyDNSCheckBox.Text);
+            UseCustomDNSCheckBox.Text = Utils.i18N.Translate(UseCustomDNSCheckBox.Text);
+            ProxyDNSCheckBox.Text = Utils.i18N.Translate(ProxyDNSCheckBox.Text);
+            UseFakeDNSCheckBox.Text = Utils.i18N.Translate(UseFakeDNSCheckBox.Text);
             GlobalBypassIPsButton.Text = Utils.i18N.Translate(GlobalBypassIPsButton.Text);
             ControlButton.Text = Utils.i18N.Translate(ControlButton.Text);
+            BootShadowsocksFromDLLCheckBox.Text = Utils.i18N.Translate(BootShadowsocksFromDLLCheckBox.Text);
 
             ExitWhenClosedCheckBox.Checked = Global.Settings.ExitWhenClosed;
             StopWhenExitedCheckBox.Checked = Global.Settings.StopWhenExited;
@@ -62,10 +63,9 @@ namespace Netch.Forms
             CheckUpdateWhenOpenedCheckBox.Checked = Global.Settings.CheckUpdateWhenOpened;
             MinimizeWhenStartedCheckBox.Checked = Global.Settings.MinimizeWhenStarted;
             RunAtStartup.Checked = Global.Settings.RunAtStartup;
-            Redirector2checkBox.Checked = Global.Settings.UseRedirector2;
-            BypassModeCheckBox.Checked = Global.Settings.ProcessBypassMode;
             EnableStartedTcping_CheckBox.Checked = Global.Settings.StartedTcping;
             DetectionInterval_TextBox.Text = Global.Settings.StartedTcping_Interval.ToString();
+            BootShadowsocksFromDLLCheckBox.Checked = Global.Settings.BootShadowsocksFromDLL;
 
             Socks5PortTextBox.Text = Global.Settings.Socks5LocalPort.ToString();
             HTTPPortTextBox.Text = Global.Settings.HTTPLocalPort.ToString();
@@ -75,8 +75,9 @@ namespace Netch.Forms
             TUNTAPNetmaskTextBox.Text = Global.Settings.TUNTAP.Netmask;
             TUNTAPGatewayTextBox.Text = Global.Settings.TUNTAP.Gateway;
 
-            TUNTAPUseCustomDNSCheckBox.Checked = Global.Settings.TUNTAP.UseCustomDNS;
-            TUNTAPProxyDNSCheckBox.Checked = Global.Settings.TUNTAP.ProxyDNS;
+            UseCustomDNSCheckBox.Checked = Global.Settings.TUNTAP.UseCustomDNS;
+            ProxyDNSCheckBox.Checked = Global.Settings.TUNTAP.ProxyDNS;
+            UseFakeDNSCheckBox.Checked = Global.Settings.TUNTAP.UseFakeDNS;
 
             BehaviorGroupBox.Text = Utils.i18N.Translate(BehaviorGroupBox.Text);
             ExitWhenClosedCheckBox.Text = Utils.i18N.Translate(ExitWhenClosedCheckBox.Text);
@@ -86,15 +87,19 @@ namespace Netch.Forms
             RunAtStartup.Text = Utils.i18N.Translate(RunAtStartup.Text);
             CheckUpdateWhenOpenedCheckBox.Text = Utils.i18N.Translate(CheckUpdateWhenOpenedCheckBox.Text);
             ProfileCount_Label.Text = Utils.i18N.Translate(ProfileCount_Label.Text);
-            ExperimentalFunction_Label.Text = Utils.i18N.Translate(ExperimentalFunction_Label.Text);
             DelayTestAfterStartup_Label.Text = Utils.i18N.Translate(DelayTestAfterStartup_Label.Text);
             EnableStartedTcping_CheckBox.Text = Utils.i18N.Translate(EnableStartedTcping_CheckBox.Text);
             DetectionInterval_Label.Text = Utils.i18N.Translate(DetectionInterval_Label.Text);
             DelayTestAfterStartup_Label.Text = Utils.i18N.Translate(DelayTestAfterStartup_Label.Text);
+            STUNServerLabel.Text = Utils.i18N.Translate(STUNServerLabel.Text);
+            STUNServerPortLabel.Text = Utils.i18N.Translate(STUNServerPortLabel.Text);
 
             ProfileCount_TextBox.Text = Global.Settings.ProfileCount.ToString();
             STUN_ServerTextBox.Text = Global.Settings.STUN_Server.ToString();
             STUN_ServerPortTextBox.Text = Global.Settings.STUN_Server_Port.ToString();
+
+            AclLabel.Text = Utils.i18N.Translate(AclLabel.Text);
+            AclAddr.Text = Global.Settings.ACL.ToString();
 
             if (Global.Settings.TUNTAP.DNS.Count > 0)
             {
@@ -114,7 +119,7 @@ namespace Netch.Forms
                 TUNTAPDNSTextBox.Text = "1.1.1.1";
             }
 
-            if (!TUNTAPUseCustomDNSCheckBox.Checked)
+            if (!UseCustomDNSCheckBox.Checked)
             {
                 TUNTAPDNSTextBox.Enabled = false;
             }
@@ -154,9 +159,8 @@ namespace Netch.Forms
             Global.Settings.CheckUpdateWhenOpened = CheckUpdateWhenOpenedCheckBox.Checked;
             Global.Settings.MinimizeWhenStarted = MinimizeWhenStartedCheckBox.Checked;
             Global.Settings.RunAtStartup = RunAtStartup.Checked;
-            Global.Settings.UseRedirector2 = Redirector2checkBox.Checked;
-            Global.Settings.ProcessBypassMode = BypassModeCheckBox.Checked;
-            Global.Settings.StartedTcping = EnableStartedTcping_CheckBox.Checked;
+            Global.Settings.BootShadowsocksFromDLL = BootShadowsocksFromDLLCheckBox.Checked;
+
 
             // 开机自启判断
             TaskSchedulerClass scheduler = new TaskSchedulerClass();
@@ -297,7 +301,7 @@ namespace Netch.Forms
                 }
                 DNS = DNS.Trim();
                 TUNTAPDNSTextBox.Text = DNS.Substring(0, DNS.Length - 1);
-                TUNTAPUseCustomDNSCheckBox.Checked = Global.Settings.TUNTAP.UseCustomDNS;
+                UseCustomDNSCheckBox.Checked = Global.Settings.TUNTAP.UseCustomDNS;
 
                 return;
             }
@@ -362,10 +366,12 @@ namespace Netch.Forms
             catch (FormatException)
             {
                 ProfileCount_TextBox.Text = Global.Settings.ProfileCount.ToString();
-                MessageBox.Show(Utils.i18N.Translate("STUN_ServerPort value illegal. Try again."), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Utils.i18N.Translate("Detection interval value illegal. Try again."), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 return;
             }
+
+            Global.Settings.ACL = AclAddr.Text;
 
             Global.Settings.TUNTAP.Address = TUNTAPAddressTextBox.Text;
             Global.Settings.TUNTAP.Netmask = TUNTAPNetmaskTextBox.Text;
@@ -377,26 +383,13 @@ namespace Netch.Forms
                 Global.Settings.TUNTAP.DNS.Add(ip);
             }
 
-            Global.Settings.TUNTAP.UseCustomDNS = TUNTAPUseCustomDNSCheckBox.Checked;
-            Global.Settings.TUNTAP.ProxyDNS = TUNTAPProxyDNSCheckBox.Checked;
+            Global.Settings.TUNTAP.UseCustomDNS = UseCustomDNSCheckBox.Checked;
+            Global.Settings.TUNTAP.ProxyDNS = ProxyDNSCheckBox.Checked;
+            Global.Settings.TUNTAP.UseFakeDNS = UseFakeDNSCheckBox.Checked;
 
             Utils.Configuration.Save();
             MessageBox.Show(Utils.i18N.Translate("Saved"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             Close();
-        }
-
-        private void BypassModeCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (BypassModeCheckBox.Checked)
-            {
-                Redirector2checkBox.Checked = false;
-                Redirector2checkBox.Enabled = false;
-            }
-            else
-            {
-                Redirector2checkBox.Enabled = true;
-            }
-
         }
     }
 }

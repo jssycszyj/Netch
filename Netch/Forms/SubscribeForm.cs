@@ -1,6 +1,7 @@
-﻿using Netch.Models;
+﻿using Netch.Utils;
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Netch.Forms
@@ -49,7 +50,17 @@ namespace Netch.Forms
             ControlButton.Text = Utils.i18N.Translate(ControlButton.Text);
 
             UserAgentTextBox.Text = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36";
-            UseSelectedServerCheckBox.Checked = Global.Settings.UseProxyToUpdateSubscription;
+
+            if (Global.Settings.Server.Count > 0)
+            {
+                UseSelectedServerCheckBox.Enabled = true;
+                UseSelectedServerCheckBox.Checked = Global.Settings.UseProxyToUpdateSubscription;
+            }
+            else
+            {
+                UseSelectedServerCheckBox.Checked = false;
+                UseSelectedServerCheckBox.Enabled = false;
+            }
 
             InitSubscribeLink();
         }
@@ -76,26 +87,33 @@ namespace Netch.Forms
             {
                 if (SubscribeLinkListView.SelectedItems.Count > 0)
                 {
-                    for (var i = SubscribeLinkListView.SelectedItems.Count - 1; i >= 0; i--)
+                    DeleteSubscribe();
+                }
+            }
+        }
+        public void DeleteSubscribe()
+        {
+            if (SubscribeLinkListView.SelectedItems.Count > 0)
+            {
+                for (var i = SubscribeLinkListView.SelectedItems.Count - 1; i >= 0; i--)
+                {
+                    var item = SubscribeLinkListView.SelectedItems[i];
+                    var link = Global.Settings.SubscribeLink[item.Index];
+
+                    var list = new List<Models.Server>();
+                    foreach (var server in Global.Settings.Server)
                     {
-                        var item = SubscribeLinkListView.SelectedItems[i];
-                        var link = Global.Settings.SubscribeLink[item.Index];
-
-                        var list = new List<Models.Server>();
-                        foreach (var server in Global.Settings.Server)
+                        if (server.Group != link.Remark)
                         {
-                            if (server.Group != link.Remark)
-                            {
-                                list.Add(server);
-                            }
+                            list.Add(server);
                         }
-
-                        Global.Settings.Server = list;
-                        Global.Settings.SubscribeLink.RemoveAt(item.Index);
-                        SubscribeLinkListView.Items.Remove(item);
-
-                        Global.MainForm.InitServer();
                     }
+
+                    Global.Settings.Server = list;
+                    Global.Settings.SubscribeLink.RemoveAt(item.Index);
+                    SubscribeLinkListView.Items.Remove(item);
+
+                    Global.MainForm.InitServer();
                 }
             }
         }
@@ -108,12 +126,55 @@ namespace Netch.Forms
                 {
                     if (LinkTextBox.Text.StartsWith("HTTP://", StringComparison.OrdinalIgnoreCase) || LinkTextBox.Text.StartsWith("HTTPS://", StringComparison.OrdinalIgnoreCase))
                     {
-                        Global.Settings.SubscribeLink.Add(new Models.SubscribeLink
+                        //是否为新增订阅
+                        var saveFlag = true;
+                        Global.Settings.SubscribeLink.ForEach((subitem) =>
                         {
-                            Remark = RemarkTextBox.Text,
-                            Link = LinkTextBox.Text,
-                            UserAgent = UserAgentTextBox.Text
+                            if (subitem.Link.Equals(LinkTextBox.Text))
+                            {
+                                if (!subitem.Remark.Equals(RemarkTextBox.Text))
+                                {
+                                    //修改了订阅备注，修改旧订阅服务器
+                                    Global.Settings.Server.ForEach((serverItem) =>
+                                    {
+                                        try
+                                        {
+                                            //当前服务器组群组为订阅群组时批量修改备注
+                                            if (serverItem.Group == subitem.Remark) {
+
+                                                //serverItem.Group OldGroupRemark
+                                                //RemarkTextBox.Text NewGroupRemark
+                                                serverItem.Group = RemarkTextBox.Text;
+                                            }
+                                        }
+                                        catch (Exception)
+                                        {
+                                        }
+                                    });
+
+                                    subitem.Remark = RemarkTextBox.Text;
+                                    Global.MainForm.InitServer();
+                                }
+
+                                subitem.UserAgent = UserAgentTextBox.Text;
+                                saveFlag = false;
+
+                                Utils.Configuration.Save();
+                                Global.Settings.UseProxyToUpdateSubscription = UseSelectedServerCheckBox.Checked;
+                                MessageBox.Show(Utils.i18N.Translate("Successfully saved"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                                return;
+                            }
                         });
+                        if (saveFlag)
+                        {
+                            Global.Settings.SubscribeLink.Add(new Models.SubscribeLink
+                            {
+                                Remark = RemarkTextBox.Text,
+                                Link = LinkTextBox.Text,
+                                UserAgent = UserAgentTextBox.Text
+                            });
+                        }
 
                         RemarkTextBox.Text = string.Empty;
                         LinkTextBox.Text = string.Empty;
@@ -143,6 +204,21 @@ namespace Netch.Forms
             Global.Settings.UseProxyToUpdateSubscription = UseSelectedServerCheckBox.Checked;
             MessageBox.Show(Utils.i18N.Translate("Successfully saved"), Utils.i18N.Translate("Information"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             Close();
+        }
+        /// <summary>
+        /// 订阅列表选中节点
+        /// TODO 选中节点编辑
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void SubscribeLinkListView_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (SubscribeLinkListView.SelectedItems.Count > 0)
+            {
+                RemarkTextBox.Text = SubscribeLinkListView.SelectedItems[0].SubItems[0].Text;
+                LinkTextBox.Text = SubscribeLinkListView.SelectedItems[0].SubItems[1].Text;
+                UserAgentTextBox.Text = SubscribeLinkListView.SelectedItems[0].SubItems[2].Text;
+            }
         }
     }
 }

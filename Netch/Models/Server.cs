@@ -1,7 +1,7 @@
-﻿using System;
-using System.Diagnostics;
+﻿using MaxMind.GeoIP2;
+using Netch.Utils;
+using System;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 
 namespace Netch.Models
@@ -139,6 +139,11 @@ namespace Netch.Models
         public int Delay = -1;
 
         /// <summary>
+        ///     地区
+        /// </summary>
+        public string Country;
+
+        /// <summary>
 		///		获取备注
 		/// </summary>
 		/// <returns>备注</returns>
@@ -149,16 +154,50 @@ namespace Netch.Models
                 Remark = $"{Hostname}:{Port}";
             }
 
+            if (Country == null)
+            {
+                try
+                {
+                    var databaseReader = new DatabaseReader("bin\\GeoLite2-Country.mmdb");
+
+                    if (IPAddress.TryParse(Hostname, out _) == true)
+                    {
+                        Country = databaseReader.Country(Hostname).Country.IsoCode;
+                    }
+                    else
+                    {
+                        var DnsResult = DNS.Lookup(Hostname);
+
+                        if (DnsResult != null)
+                        {
+                            Country = databaseReader.Country(DnsResult).Country.IsoCode;
+                        }
+                        else
+                        {
+                            Country = "UN";
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    Country = "UN";
+                }
+            }
+
+            Group = Group.Equals("None") ? Group.ToUpper() : Group;
+
             switch (Type)
             {
                 case "Socks5":
-                    return $"[S5] {Remark}";
+                    return $"[S5][{Country}][{Group}] {Remark}";
                 case "SS":
-                    return $"[SS] {Remark}";
+                    return $"[SS][{Country}][{Group}] {Remark}";
                 case "SSR":
-                    return $"[SR] {Remark}";
+                    return $"[SR][{Country}][{Group}] {Remark}";
                 case "VMess":
-                    return $"[V2] {Remark}";
+                    return $"[V2][{Country}][{Group}] {Remark}";
+                case "Trojan":
+                    return $"[TR][{Country}][{Group}] {Remark}";
                 default:
                     return "WTF";
             }
@@ -181,27 +220,11 @@ namespace Netch.Models
                 var list = new Task<int>[3];
                 for (var i = 0; i < 3; i++)
                 {
-                    list[i] = Task.Run(() =>
+                    list[i] = Task.Run(async () =>
                     {
                         try
                         {
-                            using (var client = new Socket(SocketType.Stream, ProtocolType.Tcp))
-                            {
-                                var watch = new Stopwatch();
-                                watch.Start();
-
-                                var task = client.BeginConnect(new IPEndPoint(destination, Port), result =>
-                                {
-                                    watch.Stop();
-                                }, 0);
-
-                                if (task.AsyncWaitHandle.WaitOne(1000))
-                                {
-                                    return (int)watch.ElapsedMilliseconds;
-                                }
-
-                                return 1000;
-                            }
+                            return await Utils.Utils.TCPingAsync(destination, Port);
                         }
                         catch (Exception)
                         {
@@ -210,7 +233,7 @@ namespace Netch.Models
                     });
                 }
 
-                Task.WaitAll(list);
+                Task.WaitAll(list[0], list[1], list[2]);
 
                 var min = Math.Min(list[0].Result, list[1].Result);
                 min = Math.Min(min, list[2].Result);

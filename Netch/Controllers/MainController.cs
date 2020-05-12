@@ -3,7 +3,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Netch.Controllers
@@ -40,6 +39,11 @@ namespace Netch.Controllers
         ///     V2Ray 控制器
         /// </summary>
         public VMessController pVMessController;
+
+        /// <summary>
+        ///     Trojan 控制器
+        /// </summary>
+        public TrojanController pTrojanController;
 
         /// <summary>
         ///		NF 控制器
@@ -109,6 +113,14 @@ namespace Netch.Controllers
                     }
                     result = pVMessController.Start(server, mode);
                     break;
+                case "Trojan":
+                    KillProcess("Trojan");
+                    if (pTrojanController == null)
+                    {
+                        pTrojanController = new TrojanController();
+                    }
+                    result = pTrojanController.Start(server, mode);
+                    break;
             }
 
             if (result)
@@ -127,17 +139,15 @@ namespace Netch.Controllers
                     result = pNFController.Start(server, mode, false);
                     if (!result)
                     {
-                        MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("ReStarting Redirector")}");
+                        MainForm.Instance.StatusText($"{Utils.i18N.Translate("Status")}{Utils.i18N.Translate(": ")}{Utils.i18N.Translate("Restarting Redirector")}");
                         Utils.Logging.Info("正常启动失败后尝试停止驱动服务再重新启动");
                         //正常启动失败后尝试停止驱动服务再重新启动
                         result = pNFController.Start(server, mode, true);
                     }
-                    if (result)
-                        Task.Run(() =>
-                        {
-                            pNTTController.Start();
-                        });
-
+                    else
+                    {
+                        Task.Run(() => pNTTController.Start());
+                    }
                 }
                 else if (mode.Type == 1)
                 {
@@ -152,10 +162,9 @@ namespace Netch.Controllers
                     // TUN/TAP 黑名单代理模式，启动 TUN/TAP 控制器
                     result = pTUNTAPController.Start(server, mode);
                     if (result)
-                        Task.Run(() =>
-                        {
-                            pNTTController.Start();
-                        });
+                    {
+                        Task.Run(() => pNTTController.Start());
+                    }
                 }
                 else if (mode.Type == 2)
                 {
@@ -170,10 +179,9 @@ namespace Netch.Controllers
                     // TUN/TAP 白名单代理模式，启动 TUN/TAP 控制器
                     result = pTUNTAPController.Start(server, mode);
                     if (result)
-                        Task.Run(() =>
-                        {
-                            pNTTController.Start();
-                        });
+                    {
+                        Task.Run(() => pNTTController.Start());
+                    }
                 }
                 else if (mode.Type == 3 || mode.Type == 5)
                 {
@@ -218,6 +226,10 @@ namespace Netch.Controllers
             else if (pVMessController != null)
             {
                 pVMessController.Stop();
+            }
+            else if (pTrojanController != null)
+            {
+                pTrojanController.Stop();
             }
 
             if (pNFController != null)

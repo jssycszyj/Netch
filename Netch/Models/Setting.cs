@@ -33,9 +33,14 @@ namespace Netch.Models
         public bool UseCustomDNS = false;
 
         /// <summary>
-        ///		模式2下是否代理DNS
+        ///		模式 2 下是否代理 DNS
         /// </summary>
         public bool ProxyDNS = false;
+
+        /// <summary>
+        ///		使用Fake DNS
+        /// </summary>
+        public bool UseFakeDNS = false;
     }
 
     /// <summary>
@@ -155,16 +160,6 @@ namespace Netch.Models
         public int STUN_Server_Port = 3478;
 
         /// <summary>
-        ///     是否切换为2号核心
-        /// </summary>
-        public bool UseRedirector2 = false;
-
-        /// <summary>
-        ///     是否启用进程代理白名单模式
-        /// </summary>
-        public bool ProcessBypassMode = false;
-
-        /// <summary>
         ///     是否启用启动后延迟测试
         /// </summary>
         public bool StartedTcping = false;
@@ -173,5 +168,15 @@ namespace Netch.Models
         ///     启动后延迟测试间隔/秒
         /// </summary>
         public int StartedTcping_Interval = 3;
+
+        /// <summary>
+        ///     ACL规则
+        /// </summary>
+        public string ACL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/banAD.acl";
+
+        /// <summary>
+        ///     是否使用DLL启动Shadowsocks
+        /// </summary>
+        public bool BootShadowsocksFromDLL = false;
     }
 }
