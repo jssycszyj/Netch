@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
+using Serilog;
 
 namespace Netch.Interops
 {
@@ -9,7 +11,18 @@ namespace Netch.Interops
 
         public static bool Dial(NameList name, string value)
         {
+            Log.Verbose($"[aiodns] Dial {name}: {value}");
             return aiodns_dial(name, Encoding.UTF8.GetBytes(value));
+        }
+
+        public static async Task<bool> InitAsync()
+        {
+            return await Task.Run(Init).ConfigureAwait(false);
+        }
+        
+        public static async Task FreeAsync()
+        {
+            await Task.Run(Free).ConfigureAwait(false);
         }
 
         [DllImport(aiodns_bin, CallingConvention = CallingConvention.Cdecl)]

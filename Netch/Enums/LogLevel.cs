@@ -1,10 +1,9 @@
-namespace Netch.Models
+namespace Netch.Enums
 {
     public enum LogLevel
     {
         INFO,
         WARNING,
-        ERROR,
-        DEBUG
+        ERROR
     }
 }

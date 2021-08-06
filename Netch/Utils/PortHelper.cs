@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.NetworkManagement.IpHelper;
 using Netch.Models;
-using static Vanara.PInvoke.IpHlpApi;
-using static Vanara.PInvoke.Ws2_32;
+using Serilog;
 
 namespace Netch.Utils
 {
@@ -24,18 +28,42 @@ namespace Netch.Utils
             }
             catch (Exception e)
             {
-                Global.Logger.Error("获取保留端口失败: " + e);
+                Log.Error(e, "获取保留端口错误");
             }
         }
 
-        public static IEnumerable<Process> GetProcessByUsedTcpPort(ushort port)
+        internal static IEnumerable<Process> GetProcessByUsedTcpPort(ushort port, AddressFamily inet = AddressFamily.InterNetwork)
         {
             if (port == 0)
                 throw new ArgumentOutOfRangeException();
 
-            var row = GetTcpTable2().Where(r => ntohs((ushort)r.dwLocalPort) == port).Where(r => r.dwOwningPid is not (0 or 4));
+            if (inet != AddressFamily.InterNetwork)
+                Trace.Assert(inet == AddressFamily.InterNetworkV6);
 
-            return row.Select(r => Process.GetProcessById((int)r.dwOwningPid));
+            var process = new List<Process>();
+            unsafe
+            {
+                uint err;
+                uint size = 0;
+                PInvoke.GetExtendedTcpTable(default, ref size, false, (uint)inet, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_LISTENER, 0); // get size
+                var tcpTable = (MIB_TCPTABLE_OWNER_PID*)Marshal.AllocHGlobal((int)size);
+
+                if ((err = PInvoke.GetExtendedTcpTable(tcpTable, ref size, false, (uint)inet, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_LISTENER, 0)) != 0)
+                    throw new Win32Exception((int)err);
+
+                for (var i = 0; i < tcpTable -> dwNumEntries; i++)
+                {
+                    var row = tcpTable -> table.ReadOnlyItemRef(i);
+
+                    if (row.dwOwningPid is 0 or 4)
+                        continue;
+
+                    if (PInvoke.ntohs((ushort)row.dwLocalPort) == port)
+                        process.Add(Process.GetProcessById((int)row.dwOwningPid));
+                }
+            }
+
+            return process;
         }
 
         private static void GetReservedPortRange(PortType portType, ref List<NumberRange> targetList)
@@ -108,7 +136,8 @@ namespace Netch.Utils
 
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
+                    Trace.Assert(false);
+                    return;
             }
         }
 
@@ -134,7 +163,8 @@ namespace Netch.Utils
 
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
+                    Trace.Assert(false);
+                    return;
             }
         }
 
@@ -162,11 +192,12 @@ namespace Netch.Utils
     /// <summary>
     ///     检查端口类型
     /// </summary>
+    [Flags]
     public enum PortType
     {
-        TCP,
-        UDP,
-        Both
+        TCP = 0b_01,
+        UDP = 0b_10,
+        Both = TCP | UDP
     }
 
     public class PortInUseException : Exception

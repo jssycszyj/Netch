@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+using Serilog;
 
 namespace Netch.Utils
 {
@@ -12,34 +16,62 @@ namespace Netch.Utils
         ///     缓存
         /// </summary>
         private static readonly Hashtable Cache = new();
+        private static readonly Hashtable Cache6 = new();
 
-        /// <summary>
-        ///     查询
-        /// </summary>
-        /// <param name="hostname">主机名</param>
-        /// <returns></returns>
-        public static IPAddress? Lookup(string hostname)
+        public static async Task<IPAddress?> LookupAsync(string hostname, AddressFamily inet = AddressFamily.Unspecified, int timeout = 3000)
         {
             try
             {
-                if (Cache.Contains(hostname))
-                    return Cache[hostname] as IPAddress;
+                var cacheResult = inet switch
+                {
+                    AddressFamily.Unspecified => (IPAddress?)(Cache[hostname] ?? Cache6[hostname]),
+                    AddressFamily.InterNetwork => (IPAddress?)Cache[hostname],
+                    AddressFamily.InterNetworkV6 => (IPAddress?)Cache6[hostname],
+                    _ => throw new ArgumentOutOfRangeException()
+                };
 
-                var task = Dns.GetHostAddressesAsync(hostname);
-                if (!task.Wait(1000))
-                    return null;
+                if (cacheResult != null)
+                    return cacheResult;
 
-                if (task.Result.Length == 0)
-                    return null;
-
-                Cache.Add(hostname, task.Result[0]);
-
-                return task.Result[0];
+                return await LookupNoCacheAsync(hostname, inet, timeout);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                Log.Verbose(e, "Lookup hostname {Hostname} failed", hostname);
                 return null;
             }
+        }
+
+        private static async Task<IPAddress?> LookupNoCacheAsync(string hostname, AddressFamily inet = AddressFamily.Unspecified, int timeout = 3000)
+        {
+            using var task = Dns.GetHostAddressesAsync(hostname);
+            using var resTask = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+
+            if (resTask == task)
+            {
+                var addresses = await task;
+
+                var result = addresses.FirstOrDefault(i => inet == AddressFamily.Unspecified || inet == i.AddressFamily);
+                if (result == null)
+                    return null;
+
+                switch (result.AddressFamily)
+                {
+                    case AddressFamily.InterNetwork:
+                        Cache.Add(hostname, result);
+                        break;
+                    case AddressFamily.InterNetworkV6:
+                        Cache6.Add(hostname, result);
+                        break;
+                    default:
+                        Trace.Assert(false);
+                        break;
+                }
+
+                return result;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -50,6 +82,7 @@ namespace Netch.Utils
         public static void ClearCache()
         {
             Cache.Clear();
+            Cache6.Clear();
         }
 
         public static IEnumerable<string> Split(string dns)
